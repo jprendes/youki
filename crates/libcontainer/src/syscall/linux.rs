@@ -492,7 +492,12 @@ impl Syscall for LinuxSyscall {
     }
 
     fn set_groups(&self, groups: &[Gid]) -> Result<()> {
-        setgroups(groups)?;
+        log::info!("YYYYYY libcontainer::syscall::set_groups 1");
+        if let Err(err) = setgroups(groups) {
+            log::info!("YYYYYY libcontainer::syscall::set_groups 2, {err:?}");
+            return Err(err.into());
+        }
+        log::info!("YYYYYY libcontainer::syscall::set_groups 3");
 
         Ok(())
     }

@@ -67,28 +67,35 @@ impl ContainerBuilderImpl {
     }
 
     fn run_container(&mut self) -> Result<Pid, LibcontainerError> {
+        log::info!("YYYYYY libcontainer::run_container 1, {:?}", self.container_id);
         let linux = self.spec.linux().as_ref().ok_or(MissingSpecError::Linux)?;
+        log::info!("YYYYYY libcontainer::run_container 2, {:?}", self.container_id);
         let cgroups_path = utils::get_cgroup_path(
             linux.cgroups_path(),
             &self.container_id,
             self.user_ns_config.is_some(),
         );
+        log::info!("YYYYYY libcontainer::run_container 3, {:?}", self.container_id);
         let cgroup_config = libcgroups::common::CgroupConfig {
             cgroup_path: cgroups_path,
             systemd_cgroup: self.use_systemd || self.user_ns_config.is_some(),
             container_name: self.container_id.to_owned(),
         };
+        log::info!("YYYYYY libcontainer::run_container 4, {:?}", self.container_id);
         let process = self
             .spec
             .process()
             .as_ref()
             .ok_or(MissingSpecError::Process)?;
 
+        log::info!("YYYYYY libcontainer::run_container 5, {:?}", self.container_id);
         if matches!(self.container_type, ContainerType::InitContainer) {
             if let Some(hooks) = self.spec.hooks() {
                 hooks::run_hooks(hooks.create_runtime().as_ref(), self.container.as_ref())?
             }
         }
+
+        log::info!("YYYYYY libcontainer::run_container 6, {:?}", self.container_id);
 
         // Need to create the notify socket before we pivot root, since the unix
         // domain socket used here is outside of the rootfs of container. During
@@ -97,6 +104,8 @@ impl ContainerBuilderImpl {
         // user namespace in the case that the path is located in paths only
         // root can access.
         let notify_listener = NotifyListener::new(&self.notify_path)?;
+
+        log::info!("YYYYYY libcontainer::run_container 7, {:?}", self.container_id);
 
         // If Out-of-memory score adjustment is set in specification.  set the score
         // value for the current process check
@@ -120,6 +129,8 @@ impl ContainerBuilderImpl {
                 })?;
         }
 
+        log::info!("YYYYYY libcontainer::run_container 8, {:?}", self.container_id);
+
         // Make the process non-dumpable, to avoid various race conditions that
         // could cause processes in namespaces we're joining to access host
         // resources (or potentially execute code).
@@ -129,8 +140,11 @@ impl ContainerBuilderImpl {
         // ourselves to be non-dumpable only breaks things (like rootless
         // containers), which is the recommendation from the kernel folks.
         if linux.namespaces().is_some() {
+            log::info!("YYYYYY libcontainer::run_container 9, {:?}", self.container_id);
             prctl::set_dumpable(false).unwrap();
         }
+
+        log::info!("YYYYYY libcontainer::run_container 10, {:?}", self.container_id);
 
         // This container_args will be passed to the container processes,
         // therefore we will have to move all the variable by value. Since self
@@ -150,6 +164,8 @@ impl ContainerBuilderImpl {
             executor: self.executor.clone(),
         };
 
+        log::info!("YYYYYY libcontainer::run_container 11, {:?}", self.container_id);
+
         let (init_pid, need_to_clean_up_intel_rdt_dir) =
             process::container_main_process::container_main_process(&container_args).map_err(
                 |err| {
@@ -157,16 +173,22 @@ impl ContainerBuilderImpl {
                     LibcontainerError::MainProcess(err)
                 },
             )?;
+        
+        log::info!("YYYYYY libcontainer::run_container 12, {:?}", self.container_id);
 
         // if file to write the pid to is specified, write pid of the child
         if let Some(pid_file) = &self.pid_file {
+            log::info!("YYYYYY libcontainer::run_container 13, {:?}", self.container_id);
             fs::write(pid_file, format!("{init_pid}")).map_err(|err| {
                 tracing::error!("failed to write pid to file: {}", err);
                 LibcontainerError::OtherIO(err)
             })?;
         }
 
+        log::info!("YYYYYY libcontainer::run_container 14, {:?}", self.container_id);
+
         if let Some(container) = &mut self.container {
+            log::info!("YYYYYY libcontainer::run_container 15, {:?}", self.container_id);
             // update status and pid of the container process
             container
                 .set_status(ContainerStatus::Created)
@@ -175,6 +197,8 @@ impl ContainerBuilderImpl {
                 .set_clean_up_intel_rdt_directory(need_to_clean_up_intel_rdt_dir)
                 .save()?;
         }
+
+        log::info!("YYYYYY libcontainer::run_container 16, {:?}", self.container_id);
 
         Ok(init_pid)
     }

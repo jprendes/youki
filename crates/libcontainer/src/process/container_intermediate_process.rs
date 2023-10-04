@@ -38,14 +38,19 @@ pub fn container_intermediate_process(
     init_chan: &mut (channel::InitSender, channel::InitReceiver),
     main_sender: &mut channel::MainSender,
 ) -> Result<()> {
+    log::info!("YYYYYY libcontainer::container_intermediate_process 1, {:?}", args.rootfs);
     let (inter_sender, inter_receiver) = intermediate_chan;
     let (init_sender, init_receiver) = init_chan;
     let command = args.syscall.create_syscall();
+    log::info!("YYYYYY libcontainer::container_intermediate_process 2, {:?}", args.rootfs);
     let spec = &args.spec;
     let linux = spec.linux().as_ref().ok_or(MissingSpecError::Linux)?;
+    log::info!("YYYYYY libcontainer::container_intermediate_process 3, {:?}", args.rootfs);
     let namespaces = Namespaces::try_from(linux.namespaces().as_ref())?;
+    log::info!("YYYYYY libcontainer::container_intermediate_process 4, {:?}", args.rootfs);
     let cgroup_manager =
         libcgroups::common::create_cgroup_manager(args.cgroup_config.to_owned()).unwrap();
+    log::info!("YYYYYY libcontainer::container_intermediate_process 5, {:?}", args.rootfs);
 
     // this needs to be done before we create the init process, so that the init
     // process will already be captured by the cgroup. It also needs to be done
@@ -62,12 +67,14 @@ pub fn container_intermediate_process(
         linux.resources().as_ref(),
         matches!(args.container_type, ContainerType::InitContainer),
     )?;
+    log::info!("YYYYYY libcontainer::container_intermediate_process 6, {:?}", args.rootfs);
 
     // if new user is specified in specification, this will be true and new
     // namespace will be created, check
     // https://man7.org/linux/man-pages/man7/user_namespaces.7.html for more
     // information
     if let Some(user_namespace) = namespaces.get(LinuxNamespaceType::User)? {
+        log::info!("YYYYYY libcontainer::container_intermediate_process 7, {:?}", args.rootfs);
         namespaces.unshare_or_setns(user_namespace)?;
         if user_namespace.path().is_none() {
             tracing::debug!("creating new user namespace");
@@ -85,6 +92,7 @@ pub fn container_intermediate_process(
             prctl::set_dumpable(false).unwrap();
         }
 
+        log::info!("YYYYYY libcontainer::container_intermediate_process 8, {:?}", args.rootfs);
         // After UID and GID mapping is configured correctly in the Youki main
         // process, We want to make sure continue as the root user inside the
         // new user namespace. This is required because the process of
@@ -94,6 +102,7 @@ pub fn container_intermediate_process(
         command.set_id(Uid::from_raw(0), Gid::from_raw(0))?;
     }
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 9, {:?}", args.rootfs);
     // set limits and namespaces to the process
     let proc = spec.process().as_ref().ok_or(MissingSpecError::Process)?;
     if let Some(rlimits) = proc.rlimits() {
@@ -105,11 +114,13 @@ pub fn container_intermediate_process(
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 10, {:?}", args.rootfs);
     // Pid namespace requires an extra fork to enter, so we enter pid namespace now.
     if let Some(pid_namespace) = namespaces.get(LinuxNamespaceType::Pid)? {
         namespaces.unshare_or_setns(pid_namespace)?;
     }
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 11, {:?}", args.rootfs);
     let cb: CloneCb = {
         let args = args.clone();
         let init_sender = init_sender.clone();
@@ -117,11 +128,13 @@ pub fn container_intermediate_process(
         let mut main_sender = main_sender.clone();
         let mut init_receiver = init_receiver.clone();
         Box::new(move || {
+            log::info!("YYYYYY libcontainer::init_clone_callback 1, {:?}", args.rootfs);
             if let Err(ret) = prctl::set_name("youki:[2:INIT]") {
                 tracing::error!(?ret, "failed to set name for child process");
                 return ret;
             }
 
+            log::info!("YYYYYY libcontainer::init_clone_callback 2, {:?}", args.rootfs);
             // We are inside the forked process here. The first thing we have to do
             // is to close any unused senders, since fork will make a dup for all
             // the socket.
@@ -129,10 +142,12 @@ pub fn container_intermediate_process(
                 tracing::error!(?err, "failed to close receiver in init process");
                 return -1;
             }
+            log::info!("YYYYYY libcontainer::init_clone_callback 3, {:?}", args.rootfs);
             if let Err(err) = inter_sender.close() {
                 tracing::error!(?err, "failed to close sender in the intermediate process");
                 return -1;
             }
+            log::info!("YYYYYY libcontainer::init_clone_callback 4, {:?}", args.rootfs);
             match container_init_process(&args, &mut main_sender, &mut init_receiver) {
                 Ok(_) => 0,
                 Err(e) => {
@@ -155,6 +170,7 @@ pub fn container_intermediate_process(
         })
     };
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 12, {:?}", args.rootfs);
     // We have to record the pid of the init process. The init process will be
     // inside the pid namespace, so we can't rely on the init process to send us
     // the correct pid. We also want to clone the init process as a sibling
@@ -168,6 +184,7 @@ pub fn container_intermediate_process(
         IntermediateProcessError::InitProcess(err)
     })?;
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 13, {:?}", args.rootfs);
     // Close the exec_notify_fd in this process
     if let ContainerType::TenantContainer { exec_notify_fd } = args.container_type {
         close(exec_notify_fd).map_err(|err| {
@@ -176,16 +193,19 @@ pub fn container_intermediate_process(
         })?;
     }
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 14, {:?}", args.rootfs);
     main_sender.intermediate_ready(pid).map_err(|err| {
         tracing::error!("failed to wait on intermediate process: {}", err);
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 15, {:?}", args.rootfs);
     // Close unused senders here so we don't have lingering socket around.
     main_sender.close().map_err(|err| {
         tracing::error!("failed to close unused main sender: {}", err);
         err
     })?;
+    log::info!("YYYYYY libcontainer::container_intermediate_process 16, {:?}", args.rootfs);
     inter_sender.close().map_err(|err| {
         tracing::error!(
             "failed to close sender in the intermediate process: {}",
@@ -193,11 +213,13 @@ pub fn container_intermediate_process(
         );
         err
     })?;
+    log::info!("YYYYYY libcontainer::container_intermediate_process 17, {:?}", args.rootfs);
     init_sender.close().map_err(|err| {
         tracing::error!("failed to close unused init sender: {}", err);
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_intermediate_process 18, {:?}", args.rootfs);
     Ok(())
 }
 

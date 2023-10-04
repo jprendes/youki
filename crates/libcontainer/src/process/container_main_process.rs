@@ -39,21 +39,29 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
     // cloned process, we have to be deligent about closing any unused channel.
     // At minimum, we have to close down any unused senders. The corresponding
     // receivers will be cleaned up once the senders are closed down.
+    log::info!("YYYYYY libcontainer::container_main_process 1, {:?}", container_args.rootfs);
     let (main_sender, mut main_receiver) = channel::main_channel()?;
+
+    log::info!("YYYYYY libcontainer::container_main_process 2, {:?}", container_args.rootfs);
     let inter_chan = channel::intermediate_channel()?;
+
+    log::info!("YYYYYY libcontainer::container_main_process 3, {:?}", container_args.rootfs);
     let init_chan = channel::init_channel()?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 4, {:?}", container_args.rootfs);
     let cb: CloneCb = {
         let container_args = container_args.clone();
         let mut main_sender = main_sender.clone();
         let mut inter_chan = inter_chan.clone();
         let mut init_chan = init_chan.clone();
         Box::new(move || {
+            log::info!("YYYYYY libcontainer::intermediate_clone_callback 1, {:?}", container_args.rootfs);
             if let Err(ret) = prctl::set_name("youki:[1:INTER]") {
                 tracing::error!(?ret, "failed to set name for child process");
                 return ret;
             }
 
+            log::info!("YYYYYY libcontainer::intermediate_clone_callback 2, {:?}", container_args.rootfs);
             match container_intermediate_process::container_intermediate_process(
                 &container_args,
                 &mut inter_chan,
@@ -69,11 +77,13 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         })
     };
 
+    log::info!("YYYYYY libcontainer::container_main_process 5, {:?}", container_args.rootfs);
     let intermediate_pid = fork::container_clone(cb).map_err(|err| {
         tracing::error!("failed to fork intermediate process: {}", err);
         ProcessError::IntermediateProcessFailed(err)
     })?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 6, {:?}", container_args.rootfs);
     // Close down unused fds. The corresponding fds are duplicated to the
     // child process during clone.
     main_sender.close().map_err(|err| {
@@ -81,11 +91,15 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 7, {:?}", container_args.rootfs);
     let (mut inter_sender, inter_receiver) = inter_chan;
+    log::info!("YYYYYY libcontainer::container_main_process 8, {:?}", container_args.rootfs);
     #[cfg(feature = "libseccomp")]
     let (mut init_sender, init_receiver) = init_chan;
+    log::info!("YYYYYY libcontainer::container_main_process 9, {:?}", container_args.rootfs);
     #[cfg(not(feature = "libseccomp"))]
     let (init_sender, init_receiver) = init_chan;
+    log::info!("YYYYYY libcontainer::container_main_process 10, {:?}", container_args.rootfs);
 
     // If creating a container with new user namespace, the intermediate process will ask
     // the main process to set up uid and gid mapping, once the intermediate
@@ -96,6 +110,7 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         inter_sender.mapping_written()?;
     }
 
+    log::info!("YYYYYY libcontainer::container_main_process 11, {:?}", container_args.rootfs);
     // At this point, we don't need to send any message to intermediate process anymore,
     // so we want to close this sender at the earliest point.
     inter_sender.close().map_err(|err| {
@@ -103,12 +118,16 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 12, {:?}", container_args.rootfs);
     // The intermediate process will send the init pid once it forks the init
     // process.  The intermediate process should exit after this point.
     let init_pid = main_receiver.wait_for_intermediate_ready()?;
+    log::info!("YYYYYY libcontainer::container_main_process 13, {:?}", container_args.rootfs);
     let mut need_to_clean_up_intel_rdt_subdirectory = false;
 
+    log::info!("YYYYYY libcontainer::container_main_process 14, {:?}", container_args.rootfs);
     if let Some(linux) = container_args.spec.linux() {
+        log::info!("YYYYYY libcontainer::container_main_process 15, {:?}", container_args.rootfs);
         #[cfg(feature = "libseccomp")]
         if let Some(seccomp) = linux.seccomp() {
             let state = crate::container::ContainerProcessState {
@@ -132,6 +151,7 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
             )?;
         }
 
+        log::info!("YYYYYY libcontainer::container_main_process 16, {:?}", container_args.rootfs);
         if let Some(intel_rdt) = linux.intel_rdt() {
             let container_id = container_args
                 .container
@@ -142,6 +162,8 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_main_process 17, {:?}", container_args.rootfs);
+
     // We don't need to send anything to the init process after this point, so
     // close the sender.
     init_sender.close().map_err(|err| {
@@ -149,10 +171,14 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 18, {:?}", container_args.rootfs);
+
     main_receiver.wait_for_init_ready().map_err(|err| {
         tracing::error!("failed to wait for init ready: {}", err);
         err
     })?;
+
+    log::info!("YYYYYY libcontainer::container_main_process 19, {:?}", container_args.rootfs);
 
     tracing::debug!("init pid is {:?}", init_pid);
 
@@ -163,15 +189,21 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 20, {:?}", container_args.rootfs);
+
     init_receiver.close().map_err(|err| {
         tracing::error!("failed to close init process receiver: {}", err);
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_main_process 21, {:?}", container_args.rootfs);
+
     main_receiver.close().map_err(|err| {
         tracing::error!("failed to close main process receiver: {}", err);
         err
     })?;
+
+    log::info!("YYYYYY libcontainer::container_main_process 22, {:?}", container_args.rootfs);
 
     // Before the main process returns, we want to make sure the intermediate
     // process is exit and reaped. By this point, the intermediate process
@@ -193,6 +225,8 @@ pub fn container_main_process(container_args: &ContainerArgs) -> Result<(Pid, bo
         }
         Err(err) => return Err(ProcessError::WaitIntermediateProcess(err)),
     };
+
+    log::info!("YYYYYY libcontainer::container_main_process 23, {:?}", container_args.rootfs);
 
     Ok((init_pid, need_to_clean_up_intel_rdt_subdirectory))
 }

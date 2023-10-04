@@ -270,24 +270,33 @@ pub fn container_init_process(
     main_sender: &mut channel::MainSender,
     init_receiver: &mut channel::InitReceiver,
 ) -> Result<()> {
+    log::info!("YYYYYY libcontainer::container_init_process 1, {:?}", args.rootfs);
     let syscall = args.syscall.create_syscall();
     let spec = &args.spec;
+    log::info!("YYYYYY libcontainer::container_init_process 2, {:?}", args.rootfs);
     let linux = spec.linux().as_ref().ok_or(MissingSpecError::Linux)?;
+    log::info!("YYYYYY libcontainer::container_init_process 3, {:?}", args.rootfs);
     let proc = spec.process().as_ref().ok_or(MissingSpecError::Process)?;
+    log::info!("YYYYYY libcontainer::container_init_process 5, {:?}", args.rootfs);
     let mut envs: Vec<String> = proc.env().as_ref().unwrap_or(&vec![]).clone();
     let rootfs_path = &args.rootfs;
     let hooks = spec.hooks().as_ref();
     let container = args.container.as_ref();
+    log::info!("YYYYYY libcontainer::container_init_process 6, {:?}", args.rootfs);
     let namespaces = Namespaces::try_from(linux.namespaces().as_ref())?;
+    log::info!("YYYYYY libcontainer::container_init_process 7, {:?}", args.rootfs);
     let notify_listener = &args.notify_listener;
 
+    log::info!("YYYYYY libcontainer::container_init_process 8, {:?}", args.rootfs);
     setsid().map_err(|err| {
         tracing::error!(?err, "failed to setsid to create a session");
         InitProcessError::NixOther(err)
     })?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 9, {:?}", args.rootfs);
     set_io_priority(syscall.as_ref(), proc.io_priority())?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 10, {:?}", args.rootfs);
     // set up tty if specified
     if let Some(csocketfd) = args.console_socket {
         tty::setup_console(&csocketfd).map_err(|err| {
@@ -296,15 +305,19 @@ pub fn container_init_process(
         })?;
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 11, {:?}", args.rootfs);
     apply_rest_namespaces(&namespaces, spec, syscall.as_ref())?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 12, {:?}", args.rootfs);
     if let Some(true) = proc.no_new_privileges() {
         let _ = prctl::set_no_new_privileges(true);
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 13, {:?}", args.rootfs);
     if matches!(args.container_type, ContainerType::InitContainer) {
         // create_container hook needs to be called after the namespace setup, but
         // before pivot_root is called. This runs in the container namespaces.
+        log::info!("YYYYYY libcontainer::container_init_process 14, {:?}", args.rootfs);
         if let Some(hooks) = hooks {
             hooks::run_hooks(hooks.create_container().as_ref(), container).map_err(|err| {
                 tracing::error!(?err, "failed to run create container hooks");
@@ -312,6 +325,7 @@ pub fn container_init_process(
             })?;
         }
 
+        log::info!("YYYYYY libcontainer::container_init_process 15, {:?}", args.rootfs);
         let bind_service =
             namespaces.get(LinuxNamespaceType::User)?.is_some() || utils::is_in_new_userns();
         let rootfs = RootFS::new();
@@ -327,6 +341,7 @@ pub fn container_init_process(
                 InitProcessError::RootFS(err)
             })?;
 
+        log::info!("YYYYYY libcontainer::container_init_process 16, {:?}", args.rootfs);
         // Entering into the rootfs jail. If mount namespace is specified, then
         // we use pivot_root, but if we are on the host mount namespace, we will
         // use simple chroot. Scary things will happen if you try to pivot_root
@@ -344,21 +359,25 @@ pub fn container_init_process(
             })?;
         }
 
+        log::info!("YYYYYY libcontainer::container_init_process 17, {:?}", args.rootfs);
         rootfs.adjust_root_mount_propagation(linux).map_err(|err| {
             tracing::error!(?err, "failed to adjust root mount propagation");
             InitProcessError::RootFS(err)
         })?;
 
+        log::info!("YYYYYY libcontainer::container_init_process 18, {:?}", args.rootfs);
         reopen_dev_null().map_err(|err| {
             tracing::error!(?err, "failed to reopen /dev/null");
             err
         })?;
 
+        log::info!("YYYYYY libcontainer::container_init_process 19, {:?}", args.rootfs);
         if let Some(kernel_params) = linux.sysctl() {
             sysctl(kernel_params)?;
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 20, {:?}", args.rootfs);
     if let Some(profile) = proc.apparmor_profile() {
         apparmor::apply_profile(profile).map_err(|err| {
             tracing::error!(?err, "failed to apply apparmor profile");
@@ -366,6 +385,7 @@ pub fn container_init_process(
         })?;
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 21, {:?}", args.rootfs);
     if let Some(true) = spec.root().as_ref().map(|r| r.readonly().unwrap_or(false)) {
         syscall
             .mount(
@@ -381,6 +401,7 @@ pub fn container_init_process(
             })?;
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 22, {:?}", args.rootfs);
     if let Some(umask) = proc.user().umask() {
         match Mode::from_bits(umask) {
             Some(mode) => {
@@ -392,6 +413,7 @@ pub fn container_init_process(
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 23, {:?}", args.rootfs);
     if let Some(paths) = linux.readonly_paths() {
         // mount readonly path
         for path in paths {
@@ -402,6 +424,7 @@ pub fn container_init_process(
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 24, {:?}", args.rootfs);
     if let Some(paths) = linux.masked_paths() {
         // mount masked path
         for path in paths {
@@ -412,6 +435,7 @@ pub fn container_init_process(
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 25, {:?}", args.rootfs);
     let cwd = format!("{}", proc.cwd().display());
     let do_chdir = if cwd.is_empty() {
         false
@@ -429,11 +453,13 @@ pub fn container_init_process(
         }
     };
 
+    log::info!("YYYYYY libcontainer::container_init_process 26, {:?}", args.rootfs);
     set_supplementary_gids(proc.user(), &args.user_ns_config, syscall.as_ref()).map_err(|err| {
         tracing::error!(?err, "failed to set supplementary gids");
         err
     })?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 27, {:?}", args.rootfs);
     syscall
         .set_id(
             Uid::from_raw(proc.user().uid()),
@@ -446,6 +472,7 @@ pub fn container_init_process(
             InitProcessError::SyscallOther(err)
         })?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 28, {:?}", args.rootfs);
     // Take care of LISTEN_FDS used for systemd-active-socket. If the value is
     // not 0, then we have to preserve those fds as well, and set up the correct
     // environment variables.
@@ -486,6 +513,7 @@ pub fn container_init_process(
         }
     };
 
+    log::info!("YYYYYY libcontainer::container_init_process 29, {:?}", args.rootfs);
     // Cleanup any extra file descriptors, so the new container process will not
     // leak a file descriptor from before execve gets executed. The first 3 fd will
     // stay open: stdio, stdout, and stderr. We would further preserve the next
@@ -498,6 +526,7 @@ pub fn container_init_process(
         InitProcessError::SyscallOther(err)
     })?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 30, {:?}", args.rootfs);
     // Without no new privileges, seccomp is a privileged operation. We have to
     // do this before dropping capabilities. Otherwise, we should do it later,
     // as close to exec as possible.
@@ -519,10 +548,12 @@ pub fn container_init_process(
         tracing::warn!("seccomp not available, unable to enforce no_new_privileges!")
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 31, {:?}", args.rootfs);
     capabilities::reset_effective(syscall.as_ref()).map_err(|err| {
         tracing::error!(?err, "failed to reset effective capabilities");
         InitProcessError::SyscallOther(err)
     })?;
+    log::info!("YYYYYY libcontainer::container_init_process 32, {:?}", args.rootfs);
     if let Some(caps) = proc.capabilities() {
         capabilities::drop_privileges(caps, syscall.as_ref()).map_err(|err| {
             tracing::error!(?err, "failed to drop capabilities");
@@ -530,6 +561,7 @@ pub fn container_init_process(
         })?;
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 33, {:?}", args.rootfs);
     // Change directory to process.cwd if process.cwd is not empty
     if do_chdir {
         unistd::chdir(proc.cwd()).map_err(|err| {
@@ -539,6 +571,7 @@ pub fn container_init_process(
         })?;
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 34, {:?}", args.rootfs);
     // add HOME into envs if not exists
     let home_in_envs = envs.iter().any(|x| x.starts_with("HOME="));
     if !home_in_envs {
@@ -547,12 +580,14 @@ pub fn container_init_process(
         }
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 35, {:?}", args.rootfs);
     // Reset the process env based on oci spec.
     env::vars().for_each(|(key, _value)| env::remove_var(key));
     utils::parse_env(&envs)
         .iter()
         .for_each(|(key, value)| env::set_var(key, value));
 
+    log::info!("YYYYYY libcontainer::container_init_process 36, {:?}", args.rootfs);
     // Initialize seccomp profile right before we are ready to execute the
     // payload so as few syscalls will happen between here and payload exec. The
     // notify socket will still need network related syscalls.
@@ -574,8 +609,10 @@ pub fn container_init_process(
         tracing::warn!("seccomp not available, unable to set seccomp privileges!")
     }
 
+    log::info!("YYYYYY libcontainer::container_init_process 37, {:?}", args.rootfs);
     args.executor.validate(spec)?;
 
+    log::info!("YYYYYY libcontainer::container_init_process 38, {:?}", args.rootfs);
     // Notify main process that the init process is ready to execute the
     // payload.  Note, because we are already inside the pid namespace, the pid
     // outside the pid namespace should be recorded by the intermediate process
@@ -658,45 +695,58 @@ fn set_supplementary_gids(
     user_ns_config: &Option<UserNamespaceConfig>,
     syscall: &dyn Syscall,
 ) -> Result<()> {
+    log::info!("YYYYYY libcontainer::set_supplementary_gids 1");
     if let Some(additional_gids) = user.additional_gids() {
+        log::info!("YYYYYY libcontainer::set_supplementary_gids 2");
         if additional_gids.is_empty() {
             return Ok(());
         }
 
+        log::info!("YYYYYY libcontainer::set_supplementary_gids 3");
         let setgroups = fs::read_to_string("/proc/self/setgroups").map_err(|err| {
             tracing::error!(?err, "failed to read setgroups");
             InitProcessError::Io(err)
         })?;
+        log::info!("YYYYYY libcontainer::set_supplementary_gids 4");
         if setgroups.trim() == "deny" {
             tracing::error!("cannot set supplementary gids, setgroup is disabled");
             return Err(InitProcessError::SetGroupDisabled);
         }
 
+        log::info!("YYYYYY libcontainer::set_supplementary_gids 5");
         let gids: Vec<Gid> = additional_gids
             .iter()
             .map(|gid| Gid::from_raw(*gid))
             .collect();
 
+        log::info!("YYYYYY libcontainer::set_supplementary_gids 6");
         match user_ns_config {
             Some(r) if r.privileged => {
+                log::info!("YYYYYY libcontainer::set_supplementary_gids 7");
                 syscall.set_groups(&gids).map_err(|err| {
                     tracing::error!(?err, ?gids, "failed to set privileged supplementary gids");
                     InitProcessError::SyscallOther(err)
                 })?;
             }
             None => {
+                log::info!("YYYYYY libcontainer::set_supplementary_gids 8");
                 syscall.set_groups(&gids).map_err(|err| {
+                    log::info!("YYYYYY libcontainer::set_supplementary_gids 8.1");
                     tracing::error!(?err, ?gids, "failed to set unprivileged supplementary gids");
                     InitProcessError::SyscallOther(err)
                 })?;
             }
             // this should have been detected during validation
-            _ => unreachable!(
-                "unprivileged users cannot set supplementary gids in containers with new user namespace"
-            ),
+            _ => {
+                log::info!("YYYYYY libcontainer::set_supplementary_gids 9");
+                unreachable!(
+                    "unprivileged users cannot set supplementary gids in containers with new user namespace"
+                )
+            },
         }
     }
 
+    log::info!("YYYYYY libcontainer::set_supplementary_gids 10");
     Ok(())
 }
 

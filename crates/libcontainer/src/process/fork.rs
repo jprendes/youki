@@ -57,6 +57,7 @@ pub fn container_clone(cb: CloneCb) -> Result<Pid, CloneError> {
 #[cfg(feature = "no-clone3")]
 // We should not use clone3 as required by the no-clone3 feature. Call clone directly.
 fn clone_internal(cb: CloneCb, flags: u64, exit_signal: Option<u64>) -> Result<Pid, CloneError> {
+    log::info!("YYYYYY libcontainer::fork >> about to do normal clone");
     clone(cb, flags, exit_signal)
 }
 
@@ -64,6 +65,7 @@ fn clone_internal(cb: CloneCb, flags: u64, exit_signal: Option<u64>) -> Result<P
 // Try to use clone3, and fallback to clone in case of ENOSYS.
 // Unlike the clone call, clone3 is currently using the kernel syscall.
 fn clone_internal(cb: CloneCb, flags: u64, exit_signal: Option<u64>) -> Result<Pid, CloneError> {
+    log::info!("YYYYYY libcontainer::fork >> about to do clone3");
     #[repr(C)]
     struct Clone3Args {
         flags: u64,

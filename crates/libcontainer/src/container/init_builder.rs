@@ -53,13 +53,18 @@ impl InitContainerBuilder {
 
     /// Creates a new container
     pub fn build(self) -> Result<Container, LibcontainerError> {
+        log::info!("YYYYYY libcontainer::build 1, {:?}", self.bundle);
         let spec = self.load_spec()?;
+        log::info!("YYYYYY libcontainer::build 2, {:?}", self.bundle);
         let container_dir = self.create_container_dir()?;
+        log::info!("YYYYYY libcontainer::build 3, {:?}", self.bundle);
 
         let mut container = self.create_container_state(&container_dir)?;
+        log::info!("YYYYYY libcontainer::build 4, {:?}", self.bundle);
         container
             .set_systemd(self.use_systemd)
             .set_annotations(spec.annotations().clone());
+        log::info!("YYYYYY libcontainer::build 5, {:?}", self.bundle);
 
         unistd::chdir(&container_dir).map_err(|err| {
             tracing::error!(
@@ -69,30 +74,42 @@ impl InitContainerBuilder {
             );
             LibcontainerError::OtherSyscall(err)
         })?;
+        log::info!("YYYYYY libcontainer::build 6, {:?}", self.bundle);
         let notify_path = container_dir.join(NOTIFY_FILE);
+        log::info!("YYYYYY libcontainer::build 7, {:?}", self.bundle);
         // convert path of root file system of the container to absolute path
         let rootfs = fs::canonicalize(spec.root().as_ref().ok_or(MissingSpecError::Root)?.path())
             .map_err(LibcontainerError::OtherIO)?;
+        log::info!("YYYYYY libcontainer::build 8, {:?}", self.bundle);
 
         // if socket file path is given in commandline options,
         // get file descriptors of console socket
         let csocketfd = if let Some(console_socket) = &self.base.console_socket {
+            log::info!("YYYYYY libcontainer::build 9, {:?}", self.bundle);
             Some(tty::setup_console_socket(
                 &container_dir,
                 console_socket,
                 "console-socket",
             )?)
         } else {
+            log::info!("YYYYYY libcontainer::build 10, {:?}", self.bundle);
             None
         };
+        log::info!("YYYYYY libcontainer::build 11, {:?}", self.bundle);
 
         let user_ns_config = UserNamespaceConfig::new(&spec)?;
 
+        log::info!("YYYYYY libcontainer::build 12, {:?}", self.bundle);
+
         let config = YoukiConfig::from_spec(&spec, container.id(), user_ns_config.is_some())?;
+
+        log::info!("YYYYYY libcontainer::build 13, {:?}", self.bundle);
         config.save(&container_dir).map_err(|err| {
             tracing::error!(?container_dir, "failed to save config: {}", err);
             err
         })?;
+
+        log::info!("YYYYYY libcontainer::build 14, {:?}", self.bundle);
 
         let mut builder_impl = ContainerBuilderImpl {
             container_type: ContainerType::InitContainer,
@@ -111,9 +128,15 @@ impl InitContainerBuilder {
             executor: self.base.executor,
         };
 
+        log::info!("YYYYYY libcontainer::build 15, {:?}", self.bundle);
+
         builder_impl.create()?;
 
+        log::info!("YYYYYY libcontainer::build 16, {:?}", self.bundle);
+
         container.refresh_state()?;
+
+        log::info!("YYYYYY libcontainer::build 17, {:?}", self.bundle);
 
         Ok(container)
     }
